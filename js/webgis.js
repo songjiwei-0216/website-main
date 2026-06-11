@@ -117,13 +117,12 @@ if (!activeStudent) activeStudent = 1;
 [1, 2, 3].forEach(function(sid) {
     studentLayers[sid].setVisible(sid === activeStudent);
 });
-document.addEventListener('DOMContentLoaded', function() {
-    [1, 2, 3].forEach(function(sid) {
-        var cb = document.getElementById('chk-s' + sid);
-        if (cb) cb.checked = (sid === activeStudent);
-    });
-    updateAllLegends();
+// Set checkbox states and update legend immediately
+[1, 2, 3].forEach(function(sid) {
+    var cb = document.getElementById('chk-s' + sid);
+    if (cb) cb.checked = (sid === activeStudent);
 });
+updateAllLegends();
 
 // --- Map ---
 var map = new ol.Map({
@@ -199,39 +198,53 @@ function buildStudent1Legend() {
         41:'#a058a0',42:'#87549e',43:'#71509c',44:'#5b4c9a',45:'#444898',
         51:'#882888',52:'#6f2b8e',53:'#592e94',54:'#43319a',55:'#2c34a0'
     };
-    var html = '<div style="display:inline-block;font-size:10px;line-height:1.3;">';
-    // Axis labels
-    html += '<div style="display:flex;align-items:center;margin-bottom:2px;">';
-    html += '<div style="width:20px;font-size:8px;color:#888;text-align:center;">Pol↓</div>';
-    html += '<div style="flex:1;text-align:center;font-size:8px;color:#888;">Pop →</div>';
-    html += '</div>';
-    // Grid rows (Pol 5 to 1, top to bottom)
+    // Draw legend on a Canvas for a clean image (matches GeoServer style)
+    var cell = 24, pad = 4, rowLabel = 28, colLabel = 16;
+    var w = rowLabel + cell * 5 + pad * 2;
+    var h = colLabel + cell * 5 + pad * 3 + 14 + 30;
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    var x0 = pad + rowLabel, y0 = pad + colLabel;
+    // Draw cells
     for (var pol = 5; pol >= 1; pol--) {
-        html += '<div style="display:flex;align-items:center;">';
-        // Row label
-        html += '<div style="width:20px;font-size:9px;color:#666;font-weight:500;text-align:center;">' + pol + '</div>';
         for (var pop = 1; pop <= 5; pop++) {
             var biv = pol * 10 + pop;
-            html += '<div style="width:28px;height:28px;background:' + (colors[biv]||'#ccc') + ';border:1px solid rgba(0,0,0,0.1);box-sizing:border-box;"></div>';
+            var x = x0 + (pop - 1) * cell;
+            var y = y0 + (5 - pol) * cell;
+            ctx.fillStyle = colors[biv] || '#ccc';
+            ctx.fillRect(x, y, cell, cell);
+            ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(x, y, cell, cell);
         }
-        html += '</div>';
     }
-    // Column labels
-    html += '<div style="display:flex;margin-left:20px;">';
+    // Column labels (Pop)
+    ctx.fillStyle = '#888'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
     for (var pop = 1; pop <= 5; pop++) {
-        html += '<div style="width:28px;text-align:center;font-size:8px;color:#888;">' + pop + '</div>';
+        ctx.fillText(pop, x0 + (pop - 0.5) * cell, pad + colLabel - 4);
     }
-    html += '</div>';
-    html += '</div>';
-    // Legend description
-    html += '<div style="font-size:9px;color:#999;margin-top:4px;">Pol = EU NO₂ class | Pop = quantile</div>';
-    img.style.display = 'none';
+    // Row labels (Pol)
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (var pol = 5; pol >= 1; pol--) {
+        ctx.fillStyle = '#666'; ctx.font = 'bold 10px sans-serif';
+        ctx.fillText(pol, pad + rowLabel / 2, y0 + (5 - pol + 0.5) * cell);
+    }
+    // Axis titles
+    ctx.fillStyle = '#999'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Population →', x0 + cell * 2.5, y0 + cell * 5 + pad + 10);
+    ctx.save(); ctx.translate(6, y0 + cell * 2.5); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('↑ Pollution Class', 0, 0); ctx.restore();
+    // Bottom info
+    ctx.fillStyle = '#aaa'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('bivariate = pol×10 + pop', pad, y0 + cell * 5 + pad + 24);
+    img.src = canvas.toDataURL();
+    img.style.display = '';
+    img.style.maxWidth = '220px';
+    img.style.height = 'auto';
+    // Remove old HTML grid if exists
     var old = wrap.querySelector('.biv-legend-grid');
     if (old) old.remove();
-    var div = document.createElement('div');
-    div.className = 'biv-legend-grid';
-    div.innerHTML = html;
-    wrap.appendChild(div);
 }
 
 function updateAllLegends() {
@@ -256,9 +269,6 @@ function updateAllLegends() {
 }
 
 // Rebuild legend when layer visibility changes
-document.addEventListener('DOMContentLoaded', function() {
-    if (!activeStudent) updateAllLegends();
-});
 
 // --- Popup (GetFeatureInfo) ---
 var popupContainer = document.getElementById('popup') || (function() {
