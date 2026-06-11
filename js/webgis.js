@@ -14,7 +14,6 @@ var WORKSPACE = 'gisgeoserver_02';
 
 // --- Student layer config ---
 var STUDENTS = {
-    1: { layer: 'songjiwei_bivariate', name: 'songjiwei', pollutant: 'NO₂' },
     2: { layer: 'zhangzihao_bivariate', name: 'zhangzihao', pollutant: 'PM2.5' },
     3: { layer: 'yehongjie_bivariate', name: 'yehongjie', pollutant: 'PM10' }
 };
@@ -47,17 +46,43 @@ var satelliteLayer = new ol.layer.Tile({
     })
 });
 
-// --- Build WMS layers for each student ---
+// --- Build WMS layers for students 2 & 3; local Vector for student 1 ---
 var studentLayers = {};
 var studentSources = {};
 
-[1, 2, 3].forEach(function(id) {
+// Student 1: local Vector layer from data_songjiwei.js (loaded via webgis.html)
+var s1Format = new ol.format.GeoJSON();
+studentLayers[1] = new ol.layer.VectorImage({
+    title: 'songjiwei - NO₂ Bivariate',
+    visible: true,
+    source: new ol.source.Vector({
+        features: s1Format.readFeatures(
+            typeof GEOJSON_NETHERLANDS_BIVARIATE !== 'undefined' ? GEOJSON_NETHERLANDS_BIVARIATE : {type:'FeatureCollection',features:[]},
+            { featureProjection: 'EPSG:3857' }
+        )
+    }),
+    style: function(feature) {
+        var biv = feature.get('bivariate');
+        // 5x5 bivariate colors
+        var colors = {
+            11:'#e8e8e8',12:'#cfd0cf',13:'#babfba',14:'#a7aea7',15:'#939d93',
+            21:'#d0b8d0',22:'#b7a6bf',23:'#a297ae',24:'#8d889d',25:'#77798d',
+            31:'#b888b8',32:'#9f7dae',33:'#8972a4',34:'#74679a',35:'#5e5c8f',
+            41:'#a058a0',42:'#87549e',43:'#71509c',44:'#5b4c9a',45:'#444898',
+            51:'#882888',52:'#6f2b8e',53:'#592e94',54:'#43319a',55:'#2c34a0'
+        };
+        return new ol.style.Style({
+            stroke: new ol.style.Stroke({ color: '#ffffff', width: 1 }),
+            fill: new ol.style.Fill({ color: colors[biv] || '#cccccc' })
+        });
+    }
+});
+
+[2, 3].forEach(function(id) {
     var cfg = STUDENTS[id];
     var source = new ol.source.TileWMS({
         url: GEOSERVER_WMS,
-        params: {
-            LAYERS: WORKSPACE + ':' + cfg.layer
-        },
+        params: { LAYERS: WORKSPACE + ':' + cfg.layer },
         serverType: 'geoserver',
         transition: 0
     });
@@ -69,6 +94,22 @@ var studentSources = {};
         source: source
     });
     studentLayers[id] = layer;
+});
+
+// --- Province boundaries from data_songjiwei.js ---
+var provinceLayer = new ol.layer.VectorImage({
+    title: 'Provinces',
+    visible: true,
+    source: new ol.source.Vector({
+        features: new ol.format.GeoJSON().readFeatures(
+            typeof GEOJSON_NETHERLANDS_PROVINCES !== 'undefined' ? GEOJSON_NETHERLANDS_PROVINCES : {type:'FeatureCollection',features:[]},
+            { featureProjection: 'EPSG:3857' }
+        )
+    }),
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: '#2d3436', width: 1.5 }),
+        fill: new ol.style.Fill({ color: 'rgba(44,110,73,0.08)' })
+    })
 });
 
 // --- If student param present, show only that student; otherwise default to student 1 ---
@@ -87,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // --- Map ---
 var map = new ol.Map({
     target: 'map',
-    layers: [osmLayer, cartoLayer, satelliteLayer, studentLayers[1], studentLayers[2], studentLayers[3]],
+    layers: [osmLayer, cartoLayer, satelliteLayer, studentLayers[1], studentLayers[2], studentLayers[3], provinceLayer],
     view: new ol.View({
         center: ol.proj.fromLonLat([5.5, 52.2]),
         zoom: 8,
@@ -140,6 +181,7 @@ function toggleStudentLayer(studentId, visible) {
 // --- Dynamic Legend from GeoServer GetLegendGraphic ---
 function getLegendUrl(studentId) {
     var cfg = STUDENTS[studentId];
+    if (!cfg) return '';
     var layerName = WORKSPACE + ':' + cfg.layer;
     return GEOSERVER_WMS + '?REQUEST=GetLegendGraphic&VERSION=1.3.0&FORMAT=image/png&LAYER=' + encodeURIComponent(layerName) + '&STYLE=';
 }
@@ -198,14 +240,31 @@ popupContainer.style.cssText = 'background:white;border-radius:8px;padding:12px 
 popupCloser.style.cssText = 'text-decoration:none;position:absolute;top:4px;right:8px;font-size:16px;color:#999;';
 
 map.on('singleclick', function(evt) {
+    // Try local features first (student 1)
+    var feature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; });
+    if (feature) {
+        var props = feature.getProperties();
+        var html = '<table style="width:100%;border-collapse:collapse;table-layout:auto;">';
+        for (var key in props) {
+            if (key === 'geometry') continue;
+            var val = props[key];
+            if (val === null || val === undefined) val = '';
+            if (typeof val === 'number') val = Number.isInteger(val) ? val : val.toFixed(2);
+            html += '<tr><td style="padding:2px 8px;font-weight:600;color:#2d6e49;white-space:nowrap;vertical-align:top;">' + key + ':</td><td style="padding:2px 8px;vertical-align:top;">' + val + '</td></tr>';
+        }
+        html += '</table>';
+        popupContent.innerHTML = html;
+        popupOverlay.setPosition(evt.coordinate);
+        return;
+    }
+
+    // Fallback: WMS GetFeatureInfo for students 2 & 3
     var view = map.getView();
     var resolution = view.getResolution();
     var projection = view.getProjection();
 
-    // Try each visible student layer for GetFeatureInfo
-    var found = false;
-    [1, 2, 3].forEach(function(sid) {
-        if (found || !studentLayers[sid].getVisible()) return;
+    [2, 3].forEach(function(sid) {
+        if (!studentLayers[sid].getVisible()) return;
         var source = studentSources[sid];
         var url = source.getFeatureInfoUrl(
             evt.coordinate,
@@ -214,7 +273,6 @@ map.on('singleclick', function(evt) {
             { INFO_FORMAT: 'application/json' }
         );
         if (url) {
-            found = true;
             fetch(url)
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
