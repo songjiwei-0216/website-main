@@ -192,7 +192,6 @@ function buildStudent1Legend() {
     var img = document.getElementById('legend-img-s1');
     if (!wrap || !img) return;
     wrap.style.display = '';
-    // Replace img with an inline 5x5 color grid
     var colors = {
         11:'#e8e8e8',12:'#cfd0cf',13:'#babfba',14:'#a7aea7',15:'#939d93',
         21:'#d0b8d0',22:'#b7a6bf',23:'#a297ae',24:'#8d889d',25:'#77798d',
@@ -200,17 +199,33 @@ function buildStudent1Legend() {
         41:'#a058a0',42:'#87549e',43:'#71509c',44:'#5b4c9a',45:'#444898',
         51:'#882888',52:'#6f2b8e',53:'#592e94',54:'#43319a',55:'#2c34a0'
     };
-    var html = '<div style="display:inline-grid;grid-template-columns:repeat(5,24px);grid-template-rows:repeat(5,20px);gap:1px;border:1px solid #ccc;">';
+    var html = '<div style="display:inline-block;font-size:10px;line-height:1.3;">';
+    // Axis labels
+    html += '<div style="display:flex;align-items:center;margin-bottom:2px;">';
+    html += '<div style="width:20px;font-size:8px;color:#888;text-align:center;">Pol↓</div>';
+    html += '<div style="flex:1;text-align:center;font-size:8px;color:#888;">Pop →</div>';
+    html += '</div>';
+    // Grid rows (Pol 5 to 1, top to bottom)
     for (var pol = 5; pol >= 1; pol--) {
+        html += '<div style="display:flex;align-items:center;">';
+        // Row label
+        html += '<div style="width:20px;font-size:9px;color:#666;font-weight:500;text-align:center;">' + pol + '</div>';
         for (var pop = 1; pop <= 5; pop++) {
             var biv = pol * 10 + pop;
-            html += '<div style="background:' + (colors[biv]||'#ccc') + ';border:0;font-size:7px;display:flex;align-items:center;justify-content:center;color:rgba(0,0,0,0.5);">' + (pol===1?'<span style="font-size:6px;color:#888;">P'+pop+'</span>':'') + '</div>';
+            html += '<div style="width:28px;height:28px;background:' + (colors[biv]||'#ccc') + ';border:1px solid rgba(0,0,0,0.1);box-sizing:border-box;"></div>';
         }
+        html += '</div>';
+    }
+    // Column labels
+    html += '<div style="display:flex;margin-left:20px;">';
+    for (var pop = 1; pop <= 5; pop++) {
+        html += '<div style="width:28px;text-align:center;font-size:8px;color:#888;">' + pop + '</div>';
     }
     html += '</div>';
-    html += '<div style="font-size:9px;color:#888;margin-top:2px;">Pollutant class ↑<br>Population →</div>';
+    html += '</div>';
+    // Legend description
+    html += '<div style="font-size:9px;color:#999;margin-top:4px;">Pol = EU NO₂ class | Pop = quantile</div>';
     img.style.display = 'none';
-    // Remove old grid if exists
     var old = wrap.querySelector('.biv-legend-grid');
     if (old) old.remove();
     var div = document.createElement('div');
