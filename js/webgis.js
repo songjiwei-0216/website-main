@@ -178,7 +178,7 @@ function toggleStudentLayer(studentId, visible) {
     updateAllLegends();
 }
 
-// --- Dynamic Legend from GeoServer GetLegendGraphic ---
+// --- Dynamic Legend ---
 function getLegendUrl(studentId) {
     var cfg = STUDENTS[studentId];
     if (!cfg) return '';
@@ -186,8 +186,45 @@ function getLegendUrl(studentId) {
     return GEOSERVER_WMS + '?REQUEST=GetLegendGraphic&VERSION=1.3.0&FORMAT=image/png&LAYER=' + encodeURIComponent(layerName) + '&STYLE=';
 }
 
+// Student 1 uses local data — build a static 5×5 bivariate legend
+function buildStudent1Legend() {
+    var wrap = document.getElementById('legend-wrap-s1');
+    var img = document.getElementById('legend-img-s1');
+    if (!wrap || !img) return;
+    wrap.style.display = '';
+    // Replace img with an inline 5x5 color grid
+    var colors = {
+        11:'#e8e8e8',12:'#cfd0cf',13:'#babfba',14:'#a7aea7',15:'#939d93',
+        21:'#d0b8d0',22:'#b7a6bf',23:'#a297ae',24:'#8d889d',25:'#77798d',
+        31:'#b888b8',32:'#9f7dae',33:'#8972a4',34:'#74679a',35:'#5e5c8f',
+        41:'#a058a0',42:'#87549e',43:'#71509c',44:'#5b4c9a',45:'#444898',
+        51:'#882888',52:'#6f2b8e',53:'#592e94',54:'#43319a',55:'#2c34a0'
+    };
+    var html = '<div style="display:inline-grid;grid-template-columns:repeat(5,24px);grid-template-rows:repeat(5,20px);gap:1px;border:1px solid #ccc;">';
+    for (var pol = 5; pol >= 1; pol--) {
+        for (var pop = 1; pop <= 5; pop++) {
+            var biv = pol * 10 + pop;
+            html += '<div style="background:' + (colors[biv]||'#ccc') + ';border:0;font-size:7px;display:flex;align-items:center;justify-content:center;color:rgba(0,0,0,0.5);">' + (pol===1?'<span style="font-size:6px;color:#888;">P'+pop+'</span>':'') + '</div>';
+        }
+    }
+    html += '</div>';
+    html += '<div style="font-size:9px;color:#888;margin-top:2px;">Pollutant class ↑<br>Population →</div>';
+    img.style.display = 'none';
+    // Remove old grid if exists
+    var old = wrap.querySelector('.biv-legend-grid');
+    if (old) old.remove();
+    var div = document.createElement('div');
+    div.className = 'biv-legend-grid';
+    div.innerHTML = html;
+    wrap.appendChild(div);
+}
+
 function updateAllLegends() {
     [1, 2, 3].forEach(function(sid) {
+        if (sid === 1) {
+            buildStudent1Legend();
+            return;
+        }
         var img = document.getElementById('legend-img-s' + sid);
         var wrap = document.getElementById('legend-wrap-s' + sid);
         if (!img || !wrap) return;
